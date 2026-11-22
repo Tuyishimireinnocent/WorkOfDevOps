@@ -1,4 +1,6 @@
+
 const http = require('http');
+
 const {
   authenticate,
   createSession,
@@ -13,6 +15,7 @@ const {
 
 const PORT = 3000;
 
+// Escape HTML to prevent HTML injection
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -21,6 +24,7 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
+// Home page
 function homePage(user) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -28,8 +32,14 @@ function homePage(user) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>My Web App</title>
+
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
       min-height: 100vh;
       display: flex;
@@ -39,6 +49,7 @@ function homePage(user) {
       background: linear-gradient(135deg, #1e3c72, #2a5298, #6a11cb);
       color: #fff;
     }
+
     .card {
       background: rgba(255, 255, 255, 0.12);
       backdrop-filter: blur(10px);
@@ -49,9 +60,22 @@ function homePage(user) {
       box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
       max-width: 90%;
     }
-    h1 { font-size: 2rem; margin-bottom: 12px; }
-    p { opacity: 0.85; margin-bottom: 16px; }
-    .user { margin-bottom: 22px; font-weight: 600; }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 12px;
+    }
+
+    p {
+      opacity: 0.85;
+      margin-bottom: 16px;
+    }
+
+    .user {
+      margin-bottom: 22px;
+      font-weight: 600;
+    }
+
     .badge {
       display: inline-block;
       padding: 8px 20px;
@@ -62,6 +86,7 @@ function homePage(user) {
       font-size: 0.9rem;
       margin: 0 6px 12px;
     }
+
     a.logout {
       display: inline-block;
       color: #fff;
@@ -73,86 +98,249 @@ function homePage(user) {
     }
   </style>
 </head>
+
 <body>
   <div class="card">
     <h1>Hello, this is a basic web app!</h1>
+
     <p>RP-Kigali College &middot; DevOps Y4 &middot; Practical Work #2</p>
-    <p class="user">Signed in as ${escapeHtml(user.name)} (${escapeHtml(user.role)})</p>
+
+    <p class="user">
+      Signed in as ${escapeHtml(user.name)} (${escapeHtml(user.role)})
+    </p>
+
     <span class="badge">Served with Node.js + Git</span>
     <span class="badge">Authenticated</span>
-    <div><a class="logout" href="/logout">Sign out</a></div>
+
+    <div>
+      <a class="logout" href="/logout">Sign out</a>
+    </div>
   </div>
 </body>
 </html>`;
 }
 
-function redirect(res, location, extraHeaders) {
-  res.writeHead(302, { Location: location, ...extraHeaders });
+// Redirect helper
+function redirect(res, location, extraHeaders = {}) {
+  res.writeHead(302, {
+    Location: location,
+    ...extraHeaders
+  });
+
   res.end();
 }
 
+// Get current user session
 function currentSession(req) {
   const cookies = parseCookies(req.headers.cookie);
   return getSession(cookies.sessionId);
 }
 
+// Create ONE HTTP server
 const server = http.createServer(async (req, res) => {
+
   const url = new URL(req.url, `http://${req.headers.host}`);
   const session = currentSession(req);
 
   try {
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/home')) {
-      if (!session) return redirect(res, '/login');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(homePage(session.user));
+
+    // =================================
+    // ROUTE 1: ABOUT PAGE (NEW FEATURE)
+    // =================================
+
+    if (req.method === 'GET' && url.pathname === '/about') {
+
+      res.statusCode = 200;
+
+      res.setHeader(
+        'Content-Type',
+        'text/plain; charset=utf-8'
+      );
+
+      res.end('About Page\n');
+
       return;
     }
+
+    // =================================
+    // ROUTE 2: CONTACT PAGE
+    // =================================
+
+    if (req.method === 'GET' && url.pathname === '/contact') {
+
+      res.statusCode = 200;
+
+      res.setHeader(
+        'Content-Type',
+        'text/plain; charset=utf-8'
+      );
+
+      res.end('Contact Page\n');
+
+      return;
+    }
+
+    // =================================
+    // ROUTE 3: HOME PAGE
+    // =================================
+
+    if (
+      req.method === 'GET' &&
+      (url.pathname === '/' || url.pathname === '/home')
+    ) {
+
+      if (!session) {
+        return redirect(res, '/login');
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8'
+      });
+
+      res.end(homePage(session.user));
+
+      return;
+    }
+
+    // =================================
+    // ROUTE 4: LOGIN PAGE
+    // =================================
 
     if (req.method === 'GET' && url.pathname === '/login') {
-      if (session) return redirect(res, '/');
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+
+      if (session) {
+        return redirect(res, '/');
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8'
+      });
+
       res.end(renderLoginPage());
+
       return;
     }
+
+    // =================================
+    // ROUTE 5: LOGIN AUTHENTICATION
+    // =================================
 
     if (req.method === 'POST' && url.pathname === '/login') {
+
       const body = await parseBody(req);
-      const result = authenticate(body.email, body.password);
+
+      const result = authenticate(
+        body.email,
+        body.password
+      );
+
       if (!result.ok) {
-        res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(renderLoginPage({ error: result.error, email: body.email }));
+
+        res.writeHead(401, {
+          'Content-Type': 'text/html; charset=utf-8'
+        });
+
+        res.end(
+          renderLoginPage({
+            error: result.error,
+            email: body.email
+          })
+        );
+
         return;
       }
-      const created = createSession(result.user, body.remember === 'on');
-      redirect(res, '/', { 'Set-Cookie': sessionCookie(created.id, created.maxAge) });
+
+      const created = createSession(
+        result.user,
+        body.remember === 'on'
+      );
+
+      redirect(res, '/', {
+        'Set-Cookie': sessionCookie(
+          created.id,
+          created.maxAge
+        )
+      });
+
       return;
     }
 
-    if ((req.method === 'GET' || req.method === 'POST') && url.pathname === '/logout') {
+    // =================================
+    // ROUTE 6: LOGOUT
+    // =================================
+
+    if (
+      (req.method === 'GET' || req.method === 'POST') &&
+      url.pathname === '/logout'
+    ) {
+
       const cookies = parseCookies(req.headers.cookie);
+
       destroySession(cookies.sessionId);
-      redirect(res, '/login', { 'Set-Cookie': clearSessionCookie() });
+
+      redirect(res, '/login', {
+        'Set-Cookie': clearSessionCookie()
+      });
+
       return;
     }
 
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Not found');
+    // =================================
+    // ROUTE 7: 404 PAGE NOT FOUND
+    // =================================
+
+    res.writeHead(404, {
+      'Content-Type': 'text/plain; charset=utf-8'
+    });
+
+    res.end('404 - Page Not Found');
+
   } catch (error) {
-    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+
+    console.error('Server error:', error);
+
+    res.writeHead(500, {
+      'Content-Type': 'text/plain; charset=utf-8'
+    });
+
     res.end('Internal server error');
   }
+
 });
 
+// =================================
+// SERVER ERROR HANDLING
+// =================================
+
 server.on('error', (error) => {
+
   if (error.code === 'EADDRINUSE') {
+
     console.error(`Port ${PORT} is already in use.`);
-    console.error('Stop the other process, then run: npm start');
-    console.error(`Windows: netstat -ano | findstr :${PORT}   then   taskkill /PID <pid> /F`);
+
+    console.error(
+      'Stop the other process, then run: npm start'
+    );
+
+    console.error(
+      `Windows: netstat -ano | findstr :${PORT}`
+    );
+
     process.exit(1);
+
   }
+
   throw error;
 });
 
+// =================================
+// START SERVER
+// =================================
+
 server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}/`);
+
+  console.log(
+    `Server running at http://localhost:${PORT}/`
+  );
+
 });
